@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "files": {
+    "main.exe": "https://github.com/w47k3r201800/my-app/releases/latest/download/main.exe",
+    "updater.exe": "https://github.com/w47k3r201800/my-app/releases/latest/download/updater.exe",
+    "data.ods": "https://github.com/w47k3r201800/my-app/releases/latest/download/data.ods"
+  }
+}

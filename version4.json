@@ -1,6 +1,0 @@
-{
-    "version": "1.2.3",
-    "main_url": "https://github.com/exampleuser/autoupdater/releases/latest/download/main.exe",
-    "updater_url": "https://github.com/exampleuser/autoupdater/releases/latest/download/updater.exe",
-    "data_url": "https://github.com/exampleuser/autoupdater/releases/latest/download/data.ods"
-}

@@ -7,16 +7,15 @@ import requests
 import datetime
 import tempfile
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 from tkinter.scrolledtext import ScrolledText
 import pandas as pd
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, process
 import subprocess
 import logging
-from zipfile import ZipFile
-from urllib.parse import urlparse
+import json
 
-# --- STAŁE I ŚCIEŻKI (ver1.4) ---
+# --- STAŁE I ŚCIEŻKI ---
 APPDATA_DIR = os.path.join(os.getenv("APPDATA"), "Wyszukiwarka")
 os.makedirs(APPDATA_DIR, exist_ok=True)
 
@@ -24,12 +23,12 @@ URL = "https://example.com/dane.ods"
 URL_NOWA_WERSJA = "https://example.com/main_new.exe"
 URL_WERSJA_TXT = "https://example.com/wersja.txt"
 URL_UPDATER = "https://example.com/updater.exe"
+URL_VERSION_JSON = "https://example.com/version.json"  # NOWE
 
 AKTUALNA_WERSJA = "1.0.0"
 ODSWIEZ_CO_DNI = 14
 PODOBIENSTWO = 80
-PRÓG_ZGODNOŚCI = 80
-
+ZACHOWANE_BACKUPY = 10
 NAZWA_PLIKU_ODS = "dane.ods"
 NAZWA_BAZY = "baza.sqlite"
 NAZWA_LOGU = "log.txt"
@@ -45,8 +44,9 @@ NAZWA_UPDATERA = "updater.exe"
 ŚCIEŻKA_EKSPORTU = os.path.join(APPDATA_DIR, NAZWA_EKSPORTU)
 ŚCIEŻKA_UPDATERA = os.path.join(APPDATA_DIR, NAZWA_UPDATERA)
 DATA_AKTUALIZACJI = os.path.join(APPDATA_DIR, "data_aktualizacji.txt")
+ŚCIEŻKA_UPDATERA = os.path.join(APPDATA_DIR, "updater.exe")
 
-# --- LOGOWANIE (ver1.4) ---
+# --- LOGOWANIE ---
 logging.basicConfig(
     filename=ŚCIEŻKA_LOGU,
     level=logging.DEBUG,
@@ -54,9 +54,18 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger()
-logger.info("Program start")
+logger.info(f"Program start, wersja {AKTUALNA_WERSJA}")
 
-# --- BACKUP .ODS (ver12) ---
+# --- BACKUP .ODS ---
+def backup_old_ods(dirname=APPDATA_DIR, keep=ZACHOWANE_BACKUPY):
+    backup_dir = os.path.join(dirname, "backup")
+    os.makedirs(backup_dir, exist_ok=True)
+    files = sorted([f for f in os.listdir(backup_dir) if f.startswith(NAZWA_PLIKU_ODS)],
+                   key=lambda x: os.path.getmtime(os.path.join(backup_dir, x)))
+    while len(files) >= keep:
+        os.remove(os.path.join(backup_dir, files.pop(0)))
+    logger.debug(f"Backupy po czyszczeniu: {files}")
+
 def backup_file(path):
     try:
         backup_dir = os.path.join(APPDATA_DIR, "backup")
@@ -65,10 +74,10 @@ def backup_file(path):
         backup_path = os.path.join(backup_dir, f"{NAZWA_PLIKU_ODS}_{timestamp}")
         shutil.copy2(path, backup_path)
         logger.info(f"Backup utworzony: {backup_path}")
+        backup_old_ods()
     except Exception as e:
         logger.error(f"Błąd backupu: {e}")
 
-# --- POBIERANIE PLIKU (ver1.4) ---
 def pobierz_plik(url, sciezka_docelowa):
     try:
         logger.info(f"Rozpoczynam pobieranie pliku z: {url}")
@@ -84,7 +93,6 @@ def pobierz_plik(url, sciezka_docelowa):
         messagebox.showerror("Błąd", f"Nie udało się pobrać pliku: {e}")
         return False
 
-# --- ŁADOWANIE DANYCH DO SQLITE (ver1.4) ---
 def aktualizuj_baze():
     if os.path.exists(ŚCIEŻKA_PLIKU_ODS):
         backup_file(ŚCIEŻKA_PLIKU_ODS)
@@ -104,7 +112,6 @@ def aktualizuj_baze():
         logger.error(f"Błąd aktualizacji bazy danych: {e}")
         messagebox.showerror("Błąd", f"Nie udało się zaktualizować bazy danych: {e}")
 
-# --- INICJALIZACJA BAZY (ver1.4) ---
 def initialize_database():
     if not os.path.exists(ŚCIEŻKA_BAZY) or not os.path.exists(DATA_AKTUALIZACJI):
         refresh_data()
@@ -113,7 +120,6 @@ def refresh_data():
     if pobierz_plik(URL, ŚCIEŻKA_PLIKU_ODS):
         aktualizuj_baze()
 
-# --- DATA AKTUALIZACJI (ver1.4) ---
 def zapisz_date_aktualizacji():
     with open(DATA_AKTUALIZACJI, "w") as f:
         f.write(datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S"))
@@ -133,34 +139,44 @@ def czy_aktualizacja_wymagana():
         return (datetime.datetime.now() - dt).days >= ODSWIEZ_CO_DNI
     except Exception:
         return True
+# --- BAZA DANYCH ---
+class Database:
+    def __init__(self, path): self.path = path
+    def connect(self): return sqlite3.connect(self.path)
+    def update_from_ods(self, ods_path):
+        backup_file(ods_path)
+        dane = pd.read_excel(ods_path, engine="odf")
+        with self.connect() as conn:
+            dane.to_sql("dane", conn, if_exists="replace", index=False)
+        zapisz_date_aktualizacji()
+        logger.info("Baza zaktualizowana")
+        return True
 
-# --- WYSZUKIWANIE W SQLITE Z FUZZY (sqlite + fuzzy z ver12) ---
-def wyszukaj_sqlite_fuzzy(fraza, kolumna, prog=PRÓG_ZGODNOŚCI):
-    try:
-        conn = sqlite3.connect(ŚCIEŻKA_BAZY)
-        cursor = conn.cursor()
-        cursor.execute(f"SELECT rowid, * FROM dane")
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        conn.close()
-        wyniki = []
-        fraza_norm = str(fraza).strip().lower()
-        for row in rows:
-            val = str(row[columns.index(kolumna)]).strip().lower()
-            if fraza_norm == val:
-                wyniki.append((row, 100))
-            elif len(fraza_norm) > 1 and fraza_norm.isalpha():
-                score = fuzz.partial_ratio(fraza_norm, val)
-                if score >= prog:
-                    wyniki.append((row, score))
-        wyniki.sort(key=lambda x: x[1], reverse=True)
-        return wyniki, columns
-    except Exception as e:
-        logger.error(f"Błąd wyszukiwania: {e}")
-        messagebox.showerror("Błąd", f"Nie udało się wyszukać danych: {e}")
-        return [], []
+    def search(self, fraza, kolumna):
+        try:
+            with self.connect() as conn:
+                cursor = conn.cursor()
+                if fraza.isnumeric() or len(fraza)==1:
+                    cursor.execute(f"SELECT rowid, * FROM dane WHERE {kolumna} = ?", (fraza,))
+                    wyniki = [(r, 100) for r in cursor.fetchall()]
+                else:
+                    pattern = f"%{fraza}%"
+                    cursor.execute(f"SELECT rowid, * FROM dane WHERE lower({kolumna}) LIKE ?", (pattern.lower(),))
+                    fetched = cursor.fetchall()
+                    wyniki = []
+                    for r in fetched:
+                        val = str(r[cursor.description.index((kolumna,))]).lower()
+                        score = fuzz.ratio(fraza.lower(), val)
+                        if score >= PODOBIENSTWO:
+                            wyniki.append((r, score))
+                wyniki.sort(key=lambda x: x[1], reverse=True)
+                cols = [d[0] for d in cursor.description]
+                return wyniki, cols
+        except Exception as e:
+            logger.error(f"Błąd wyszukiwania: {e}")
+            messagebox.showerror("Błąd", f"Nie udało się wyszukać danych: {e}")
+            return [], []
 
-# --- EKSPORT WYNIKÓW (ver1.4, automatyczny) ---
 def export_results(results, columns, fuzzy=True):
     try:
         export_dir = os.path.join(APPDATA_DIR, "eksport")
@@ -185,22 +201,23 @@ def uruchom_updater():
     subprocess.Popen([ŚCIEŻKA_UPDATERA], shell=True)
     sys.exit()
 
-# --- GUI (ver1.4, automatyczny eksport, threading) ---
+# --- GUI ---
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"Wyszukiwarka - wersja {AKTUALNA_WERSJA}")
         self.geometry("800x600")
-        self.current_results = []
-        self.current_columns = []
+        self.db = Database(ŚCIEŻKA_BAZY)
+        self.results, self.columns = [], []
         self.create_widgets()
         self.load_columns()
         self.update_label()
+        self.after(1000, self.periodic_tasks)
 
     def create_widgets(self):
         frame = ttk.Frame(self)
         frame.pack(pady=10, padx=10, fill=tk.X)
-
+        
         # Kolumna
         ttk.Label(frame, text="Wybierz kolumnę:").grid(row=0, column=0, sticky="w")
         self.column_cb = ttk.Combobox(frame, state='readonly', width=30)
@@ -259,21 +276,23 @@ class App(tk.Tk):
     def update_label(self):
         self.last_update_var.set(f"Ostatnia aktualizacja: {odczytaj_date_aktualizacji()}")
 
-    def on_search_thread(self):
-        threading.Thread(target=self.on_search, daemon=True).start()
+    def threaded(self, fn):
+        def wrapper():
+            threading.Thread(target=fn, daemon=True).start()
+        return wrapper
 
     def on_search(self):
         query = self.search_entry.get().strip()
         col = self.column_cb.get()
-        if not query:
-            messagebox.showwarning("Uwaga", "Wprowadź tekst do wyszukania.")
+        if not query or not col:
+            messagebox.showwarning("Uwaga", "Brak frazy lub kolumny. Wprowadź tekst do wyszukania.")
             return
         if not col:
             messagebox.showwarning("Uwaga", "Wybierz kolumnę do wyszukiwania.")
             return
-        results, columns = wyszukaj_sqlite_fuzzy(query, col)
-        self.current_results = results
-        self.current_columns = columns
+        results, columns = self.db.search(query, col)
+        self.results = results
+        self.columns = columns
         self.display_results(results, columns)
 
     def display_results(self, results, columns):
@@ -286,13 +305,15 @@ class App(tk.Tk):
             self.results_box.insert(tk.END, f"Wiersz {row[0]} (trafność {score}%): {row_data}\n")
 
     def on_export(self):
-        if not self.current_results:
-            messagebox.showinfo("Info", "Brak wyników do eksportu.")
-            return
-        export_results(self.current_results, self.current_columns)
-
-    def on_refresh_thread(self):
-        threading.Thread(target=self._refresh_thread, daemon=True).start()
+        if not self.results: messagebox.showinfo("Info","Brak wyników"); return
+        fdir=os.path.join(APPDATA_DIR,"eksport"); os.makedirs(fdir,exist_ok=True)
+        fn=os.path.join(fdir,f"wyniki_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+        with open(fn, 'w', encoding='utf-8') as f:
+            for r,s in self.results:
+                d=dict(zip(self.columns,r))
+                f.write(f"Wiersz {r[0]} (trafność {s}%): {d}\n")
+        logger.info(f"Wyniki zapisane w {fn}")
+        messagebox.showinfo("Sukces",f"Zapisano: {fn}")
 
     def _refresh_thread(self):
         self.results_box.insert(tk.END, "Aktualizacja danych...\n")
@@ -311,7 +332,9 @@ class App(tk.Tk):
         self.update_label()
         self.results_box.insert(tk.END, "Zakończono aktualizację bazy.\n")
 
-if __name__ == "__main__":
+if __name__=="__main__":
+    if not os.path.exists(ŚCIEŻKA_BAZY) or not os.path.exists(DATA_AKTUALIZACJI):
+        refresh_data()
     initialize_database()
     app = App()
     app.mainloop()
