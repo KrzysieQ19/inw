@@ -1,0 +1,8 @@
+{
+  "version": "1.0.1",
+  "files": {
+    "main.exe": "https://github.com/user/repo/releases/download/v1.0.1/main.exe",
+    "updater.exe": "https://github.com/user/repo/releases/download/v1.0.1/updater.exe",
+    "dane.ods": "https://github.com/user/repo/releases/download/v1.0.1/dane.ods"
+  }
+}
