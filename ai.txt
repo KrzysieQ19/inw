@@ -1,0 +1,104 @@
+przeanalizuj te kody pod względem optymalizacji oraz zgodności z założeniami, jak i co miały robić. wypisz, co można zoptymalizować, co jest niezgodne z założeniami (brak/inaczej działa itp.), co jest nadporgramowo, czego nie ma w założeniach.
+założenia: 
+- main.py to główny kod programu. mogę spakować go w .exe i wysłać komuś, bez dołączania innych plików. wszystkie pliki albo tworzy albo pobiera z githuba. wszystkie pliki zapisane są w folderze appdata. tworzy bazę danych sqlite z pliku .ods. przeszukuje wybraną w gui kolumnę z tej bazy. jeśli szukana fraza jest liczbą lub jest to tylko jeden znak - szuka normalnie (wyszukiwanie ścisłe); w przeciwnym wypadku - fuzzy search (ograniczany przez stałą PODOBIENSTWO). eksportuje wyniki jako logi. tworzy backupy bazy danych. stare backupy usuwa. co x (zdefiniowane przez stałą) dni aktualizuje bazę danych, pobierając plik .ods z githuba. w gui zawiera pole do wyszukiwania, wybór kolumny do przeszukiwania, pole wyników, datę ostatniej aktualizacji, przyciski do ręcznej aktualizacji programu oraz bazy danych (w przeciwieństwie do automatycznej aktualizacji, która zachodzi co x dni/przy wydaniu nowej wersji, bez ingerencji użytkownika). sprawdza, czy na githubie jest dostępna nowa wersja maina. pobiera wtedy updater.py.
+- updater.py służy do zaktualizowania porgramu głównego. po zaistalowaniu, instaluje najnowszą wersję programu głównego. czeka, aż main się zamknie. wtedy podmienia go na nową wersję, uruchamia ją i sam się zamyka.
+- oba pliki posiadają dużą obsługę błędów, logowanie działań oraz kontakt z użytkowanikiem (main.py - gui; updater.py - konsola).
+- version.json zawiera numer wersji oraz url plików do pobrania.
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+Oto szczegółowa analiza kodów main.py, updater.py i version.json pod kątem optymalizacji, zgodności z założeniami oraz elementów zbędnych lub brakujących:
+
+1. main.py
+Zgodność z założeniami
+Lokalizacja plików: Wszystkie pliki są zapisywane w %APPDATA%\Wyszukiwarka – zgodne.
+Tworzenie/pobieranie plików: Pliki są pobierane lub tworzone, nie wymagają obecności innych plików przy pierwszym uruchomieniu – zgodne.
+Baza danych: Tworzy bazę SQLite z pliku ODS, backupuje ją, usuwa stare backupy – zgodne.
+Wyszukiwanie:
+Jeśli fraza to liczba lub pojedynczy znak – wyszukiwanie ścisłe.
+W innym przypadku – fuzzy search z progiem PODOBIENSTWO.
+Przeszukuje wybraną kolumnę – zgodne.
+Eksport wyników: Wyniki mogą być eksportowane do pliku tekstowego – zgodne.
+Backupy: Tworzy backupy, usuwa stare – zgodne.
+Automatyczna aktualizacja bazy: Sprawdza datę ostatniej aktualizacji i pobiera nowy plik ODS co X dni – zgodne.
+GUI: Zawiera pole wyszukiwania, wybór kolumny, pole wyników, datę ostatniej aktualizacji, przyciski do ręcznej aktualizacji programu i bazy – zgodne.
+Aktualizacja programu: Przycisk uruchamia updatera – zgodne.
+Sprawdzanie nowej wersji: NIE jest zaimplementowane automatyczne sprawdzanie nowej wersji programu na GitHubie (jest tylko ręczne uruchomienie updatera).
+Obsługa błędów i logowanie: Rozbudowane logowanie i obsługa błędów – zgodne.
+Optymalizacje i uwagi
+Automatyczna aktualizacja programu:
+Brak automatycznego sprawdzania nowej wersji programu na GitHubie i pobierania updatera – tylko ręczne przez przycisk.
+URL-e do plików:
+W kodzie są na sztywno wpisane URL-e (URL, URL_UPDATER, URL_VERSION_JSON), ale nie korzysta z version.json do pobierania aktualnych linków.
+Optymalizacja: Pobierać URL-e z version.json, nie trzymać ich na sztywno.
+Backupy:
+Backupy są robione tylko dla pliku ODS, nie dla bazy SQLite.
+Optymalizacja: Można rozważyć backup bazy SQLite.
+Eksport wyników:
+Funkcja export_results jest zdefiniowana, ale nie używana – eksport jest robiony w innej metodzie (on_export).
+Optymalizacja: Ujednolicić eksport wyników.
+Wielowątkowość:
+Część operacji jest w wątkach, część nie (np. on_search nie jest w wątku, co może blokować GUI przy dużych bazach).
+Powielone ścieżki:
+ŚCIEŻKA_UPDATERA jest zdefiniowana dwa razy.
+Nadprogramowe:
+Funkcja export_results nie jest używana.
+Funkcja threaded jest zdefiniowana, ale nie używana.
+Brak:
+Brak automatycznego pobierania updatera, jeśli jest nowa wersja programu.
+Brak automatycznego sprawdzania wersji programu (tylko ręczne przez przycisk).
+Obsługa błędów:
+W niektórych miejscach (np. pobieranie pliku) wyświetla messagebox, co jest zgodne z założeniami.
+2. updater.py
+Zgodność z założeniami
+Cel: Służy do aktualizacji programu głównego – zgodne.
+Czeka na zamknięcie main.exe: Funkcja wait_for_close – zgodne.
+Podmienia plik, uruchamia nową wersję, zamyka się – zgodne.
+Pobiera URL-e z version.json: Funkcja get_url_from_version_json – zgodne.
+Obsługa błędów i logowanie: Rozbudowane logowanie i komunikaty w konsoli – zgodne.
+Optymalizacje i uwagi
+URL version.json:
+W kodzie jest na sztywno wpisany URL do version.json (https://example.com/version.json), a nie do GitHub – powinien być zgodny z rzeczywistym repozytorium.
+Ścieżki:
+Zakłada, że main.exe jest w %APPDATA%\Wyszukiwarka – zgodne z main.py.
+Obsługa procesu:
+Sprawdza proces po nazwie pliku – OK, choć na Windowsie może być kilka procesów o tej samej nazwie.
+Brak:
+Nie sprawdza, czy pobrana wersja jest nowsza niż obecna – zawsze podmienia.
+Nadprogramowe:
+Możliwość podania URL-a do pobrania jako argumentu – nie było w założeniach, ale nie przeszkadza.
+3. version.json
+Zgodność z założeniami
+Zawiera numer wersji i URL-e do plików – zgodne.
+4. Podsumowanie – lista rzeczy do poprawy/usprawnienia
+Braki względem założeń
+main.py
+Brak automatycznego sprawdzania dostępności nowej wersji programu na GitHubie (tylko ręczne przez przycisk).
+Brak automatycznego pobierania updatera, jeśli jest nowa wersja programu.
+Nie korzysta z version.json do pobierania URL-i (URL-e są na sztywno).
+updater.py
+Nie sprawdza, czy pobrana wersja jest nowsza niż obecna (może nadpisać tą samą wersją).
+URL do version.json jest na sztywno, nie z repozytorium GitHub.
+main.py
+Funkcja export_results nie jest używana (nadprogramowa).
+Funkcja threaded nie jest używana (nadprogramowa).
+Powielona definicja ŚCIEŻKA_UPDATERA.
+Optymalizacje
+main.py
+Przenieść URL-e do pobierania plików do version.json i pobierać je dynamicznie.
+Ujednolicić eksport wyników (usunąć nieużywane funkcje).
+Rozważyć backup bazy SQLite.
+Użyć wielowątkowości przy wszystkich operacjach mogących blokować GUI.
+updater.py
+Sprawdzać wersję przed podmianą pliku.
+Użyć rzeczywistego URL do version.json z GitHub.
+Oba pliki
+Uprościć i ujednolicić obsługę ścieżek i logowania.
+5. Elementy nadprogramowe
+Możliwość podania URL-a do updatera jako argumentu (updater.py).
+Funkcja export_results i threaded w main.py – nie są używane.
+6. Elementy niezgodne z założeniami
+Brak automatycznego sprawdzania i pobierania nowej wersji programu (main.py).
+Brak dynamicznego pobierania URL-i z version.json (main.py).
+Podsumowanie:
+Kod jest w większości zgodny z założeniami, ale wymaga kilku poprawek, by w pełni spełniał wymagania (szczególnie automatyczna aktualizacja programu i dynamiczne pobieranie URL-i z version.json). Są też drobne elementy nadprogramowe i powielone. Optymalizacje dotyczą głównie ujednolicenia eksportu, obsługi wersji i pobierania plików.

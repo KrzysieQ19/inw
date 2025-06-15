@@ -193,7 +193,7 @@ def export_results(results, columns, fuzzy=True):
         logger.error(f"Błąd eksportu wyników: {e}")
         messagebox.showerror("Błąd", f"Nie udało się wyeksportować wyników: {e}")
 
-# --- AKTUALIZACJA / UPDATER (ver1.4) ---
+# --- AKTUALIZACJA / UPDATER ---
 def uruchom_updater():
     if not os.path.exists(ŚCIEŻKA_UPDATERA):
         if not pobierz_plik(URL_UPDATER, ŚCIEŻKA_UPDATERA):

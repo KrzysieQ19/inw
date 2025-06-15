@@ -10,7 +10,7 @@ import logging
 APPDATA = os.path.join(os.getenv("APPDATA"), "Wyszukiwarka")
 TMP_NAME = "tmp_update.exe"
 LOG = os.path.join(APPDATA, "updater.log")
-VERSION_URL = "https://example.com/version.json"  # <- Tylko to zmienione
+VERSION_URL = "https://example.com/version.json"
 logging.basicConfig(
     filename=LOG,
     level=logging.DEBUG,
