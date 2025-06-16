@@ -18,7 +18,7 @@ import json
 APPDATA_DIR = os.path.join(os.getenv("APPDATA"), "Wyszukiwarka")
 os.makedirs(APPDATA_DIR, exist_ok=True)
 
-NAZWA_PLIKU_ODS = "dane.ods"
+NAZWA_PLIKU_ODS = "data.ods"
 NAZWA_BAZY = "baza.sqlite"
 NAZWA_LOGU = "log.txt"
 NAZWA_EKSPORTU = "wyniki.txt"
