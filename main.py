@@ -287,6 +287,12 @@ class App(tk.Tk):
         self.update_db_button = ttk.Button(frame, text="Aktualizuj bazę", command=self.on_update_db_thread)
         self.update_db_button.grid(row=0, column=6, rowspan=2, padx=10, pady=2)
 
+        self.open_logs_button = ttk.Button(frame, text="Otwórz folder logów", command=self.open_logs_folder)
+        self.open_logs_button.grid(row=2, column=0, columnspan=2, sticky="ew", pady=2)
+
+        self.open_exports_button = ttk.Button(frame, text="Otwórz folder eksportów", command=self.open_exports_folder)
+        self.open_exports_button.grid(row=2, column=2, columnspan=2, sticky="ew", pady=2)
+
         self.last_update_var = tk.StringVar()
         self.label_update = ttk.Label(self, textvariable=self.last_update_var)
         self.label_update.pack(pady=2)
@@ -294,6 +300,16 @@ class App(tk.Tk):
         self.results_box = ScrolledText(self, height=25, width=100)
         self.results_box.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 
+    def open_logs_folder(self):
+        folder = APPDATA_DIR
+        subprocess.Popen(f'explorer "{folder}"')
+
+    def open_exports_folder(self):
+        folder = os.path.join(APPDATA_DIR, "eksport")
+        if not os.path.exists(folder):
+            os.makedirs(folder, exist_ok=True)
+        subprocess.Popen(f'explorer "{folder}"')
+    
     def load_columns(self):
         try:
             conn = sqlite3.connect(ŚCIEŻKA_BAZY)
