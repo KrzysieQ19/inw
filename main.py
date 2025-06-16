@@ -33,7 +33,7 @@ DATA_AKTUALIZACJI = os.path.join(APPDATA_DIR, "data_aktualizacji.txt")
 ŚCIEŻKA_UPDATERA = os.path.join(APPDATA_DIR, NAZWA_UPDATERA)
 
 # --- KONFIGURACJA ---
-VERSION_JSON_URL = "https://github.com/w47k3r201800/my-app/releases/latest/download/version.json"
+VERSION_JSON_URL = "https://github.com/KrzysieQ19/inw/releases/latest/download/version.json"
 AKTUALNA_WERSJA = "1.0.0"
 ODSWIEZ_CO_DNI = 14
 PODOBIENSTWO = 80

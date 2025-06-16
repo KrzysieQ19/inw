@@ -10,7 +10,7 @@ import json
 APPDATA = os.path.join(os.getenv("APPDATA"), "Wyszukiwarka")
 TMP_NAME = "tmp_update.exe"
 LOG = os.path.join(APPDATA, "updater.log")
-VERSION_URL = "https://github.com/w47k3r201800/my-app/releases/latest/download/version.json"
+VERSION_URL = "https://github.com/KrzysieQ19/inw/releases/latest/download/version.json"
 logging.basicConfig(
     filename=LOG,
     level=logging.DEBUG,
