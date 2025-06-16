@@ -5,12 +5,12 @@ import subprocess
 import requests
 import sys
 import logging
+import json
 
-# --- STAŁE ---
 APPDATA = os.path.join(os.getenv("APPDATA"), "Wyszukiwarka")
 TMP_NAME = "tmp_update.exe"
 LOG = os.path.join(APPDATA, "updater.log")
-VERSION_URL = "https://example.com/version.json"
+VERSION_URL = "https://github.com/w47k3r201800/my-app/releases/latest/download/version.json"
 logging.basicConfig(
     filename=LOG,
     level=logging.DEBUG,
@@ -41,6 +41,27 @@ def wait_for_close(exe, timeout=30):
             print("Przekroczono czas oczekiwania na zamknięcie programu!")
             break
         time.sleep(1)
+
+def pobierz_version_json():
+    try:
+        r = requests.get(VERSION_URL, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        logger.error(f"Błąd pobierania version.json: {e}")
+        print(f"Błąd podczas pobierania version.json: {e}")
+        return None
+
+def get_url_and_version(nazwa_pliku):
+    data = pobierz_version_json()
+    if not data:
+        return None, None
+    url = data.get("files", {}).get(nazwa_pliku)
+    wersja = data.get("version")
+    if not url:
+        logger.error(f"Brak URL do pliku {nazwa_pliku} w version.json")
+        print(f"Brak URL do pliku {nazwa_pliku} w version.json")
+    return url, wersja
 
 def download(url, dest):
     logger.info(f"Pobieram {url}")
@@ -79,41 +100,38 @@ def start_new(exe):
         print(f"Błąd podczas uruchamiania programu: {e}")
         raise
 
-def get_url_from_version_json(nazwa_pliku):
-    try:
-        print("Pobieram informacje o wersji z serwera...")
-        r = requests.get(VERSION_URL, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        url = data.get("files", {}).get(nazwa_pliku)
-        if not url:
-            raise ValueError(f"Brak URL do pliku {nazwa_pliku} w version.json")
-        logger.info(f"URL z version.json: {url}")
-        print(f"Znaleziono URL do nowej wersji: {url}")
-        return url
-    except Exception as e:
-        logger.error(f"Błąd odczytu version.json: {e}")
-        print(f"Błąd podczas pobierania informacji o wersji: {e}")
-        raise
+def get_local_version(exe_path):
+    # Zakładamy, że wersja jest w pliku version.txt obok exe lub w logu
+    version_file = os.path.join(APPDATA, "version.txt")
+    if os.path.exists(version_file):
+        with open(version_file, "r") as f:
+            return f.read().strip()
+    return None
 
 def main():
     try:
         exe = sys.argv[1] if len(sys.argv) >= 2 else "main.exe"
-        url_arg = sys.argv[2] if len(sys.argv) >= 3 else None
         old = os.path.join(APPDATA, exe)
         tmp = os.path.join(APPDATA, TMP_NAME)
-
         os.makedirs(APPDATA, exist_ok=True)
         wait_for_close(old)
 
-        if url_arg:
-            url = url_arg
-            print(f"Używam podanego URL: {url}")
-        else:
-            url = get_url_from_version_json(exe)
+        url, wersja_zdalna = get_url_and_version(exe)
+        if not url or not wersja_zdalna:
+            print("Nie udało się pobrać informacji o wersji.")
+            return
+
+        wersja_lokalna = get_local_version(old)
+        if wersja_lokalna == wersja_zdalna:
+            print("Program jest już w najnowszej wersji.")
+            logger.info("Brak potrzeby aktualizacji.")
+            return
 
         download(url, tmp)
         replace(old, tmp)
+        # Zapisz nową wersję
+        with open(os.path.join(APPDATA, "version.txt"), "w") as f:
+            f.write(wersja_zdalna)
         start_new(old)
         print("Aktualizacja zakończona pomyślnie.")
     except Exception as e:
