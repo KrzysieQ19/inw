@@ -188,8 +188,10 @@ class Database:
                     cursor.execute(f"SELECT rowid, * FROM dane WHERE lower({kolumna}) LIKE ?", (pattern.lower(),))
                     fetched = cursor.fetchall()
                     wyniki = []
+                    col_names = [desc[0] for desc in cursor.description]
+                    col_idx = col_names.index(kolumna)
                     for r in fetched:
-                        val = str(r[cursor.description.index((kolumna,))]).lower()
+                        val = str(r[col_idx]).lower()
                         score = fuzz.ratio(fraza.lower(), val)
                         if score >= PODOBIENSTWO:
                             wyniki.append((r, score))
@@ -252,13 +254,14 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"Wyszukiwarka - wersja {AKTUALNA_WERSJA}")
-        self.geometry("800x600")
+        self.geometry("1100x600")
         self.db = Database(ŚCIEŻKA_BAZY)
         self.results, self.columns = [], []
         self.create_widgets()
         self.load_columns()
         self.update_label()
         self.after(1000, self.periodic_tasks)
+        self.bind("<Return>", lambda event: self.on_search_thread())
 
     def create_widgets(self):
         frame = ttk.Frame(self)
